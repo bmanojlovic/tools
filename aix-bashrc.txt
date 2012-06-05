@@ -1,0 +1,67 @@
+LANG=en_US
+LC_COLLATE="en_US.UTF-8"
+LC_CTYPE="en_US.UTF-8"
+LC_MONETARY="en_US.UTF-8"
+LC_NUMERIC="en_US.UTF-8"
+LC_TIME="en_US.UTF-8"
+LC_MESSAGES="en_US.UTF-8"
+LC_ALL=en_US.UTF-8
+export LC_COLLATE LC_CTYPE LC_MONETARY LC_NUMERIC LC_TIME LC_MESSAGES LC_ALL
+export PATH=$PATH:/usr/vac/bin:/usr/vacpp/bin
+alias ll="ls -la"                                                                                                                                                                
+alias l="ls -la"                                                                                                                                                                 
+MTYPE=`uname -s`                                                                                                                                                                 
+BRIGHTRED="41"
+NORMALRED="31"
+BRIGHTBLUE="44"
+NORMALBLUE="34"
+BRIGHTPINK="35"
+NORMALPINK="45"
+BRIGHTCYAN="46"
+NORMALCYAN="36"
+
+################### Chose color from above which you wanna have in prompt
+################### AIX only :) linux has normal termcap not needed
+COLOR=${NORMALBLUE}
+
+################### Server type example PRODUCTION
+SERVER_TYPE="AIX ZIS"
+
+SIZEOFTYPE=`echo -n $SERVER_TYPE|wc -c`
+
+function prompt_command {
+        # http://www.tldp.org/HOWTO/Bash-Prompt-HOWTO
+        let prompt_x=$(($(tput cols)-${SIZEOFTYPE}-2))
+        tput sc
+        tput cup 0 ${prompt_x}
+        tput setaf 4 ; tput bold
+        echo -n "["
+        tput setaf 1
+        if [ ${MTYPE} == 'AIX' ]; then                                                                                                                                           
+                # this is really termcap capability but hey it is aix                                                                                                            
+                # problem not bash...                                                                                                                                            
+                P="\033[${COLOR}m${SERVER_TYPE}\033[0m"                                                                                                                          
+                echo -en ${P}                                                                                                                                                    
+        else                                                                                                                                                                     
+                echo -n "${SERVER_TYPE}"                                                                                                                                         
+        fi                                                                                                                                                                       
+        tput setaf 4 ; tput bold                                                                                                                                                 
+        echo -n "]"                                                                                                                                                              
+        tput rc                                                                                                                                                                  
+}
+if [ -t 0 ]; then 
+        PROMPT_COMMAND=prompt_command
+        PAGER="less"
+        U=`id -u`
+        if [ ${U} == "0" ]; then
+                PSIGN='#'
+        else 
+                PSIGN='$'
+        fi
+        PS1="\[\033[1;${COLOR}m\]\u@\h:\w ${PSIGN}\[\033[0m\] "
+        export PAGER PS1
+fi
+# C compiler...
+CC="gxlc -q64"
+export CC
+
