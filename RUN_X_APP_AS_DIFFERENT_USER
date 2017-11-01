@@ -1,0 +1,31 @@
+#!/bin/sh
+# what to do to make this work
+cat << EOF >> /dev/null
+
+add to sudoers these lines (change application and user)
+######
+Defaults!/usr/bin/kodi,/usr/bin/xauth env_keep += "DISPLAY"
+steki  ALL=(kodi) NOPASSWD:  /usr/bin/kodi,/usr/bin/xauth
+#####
+
+EOF
+export KODI_USER=kodi
+export KODI_HOME=$(getent passwd ${KODI_USER} |cut -d: -f 6)
+if [ $? -ne 0 ];
+then
+        echo "no such user please create ${KODI_USER}"
+        exit -1
+fi
+setfacl -m u:${KODI_USER}:x /run/user/$(id -u)
+setfacl -m u:${KODI_USER}:x /run/user/$(id -u)/pulse/
+setfacl -m u:${KODI_USER}:rwx /run/user/$(id -u)/pulse/native
+cd 
+xauth extract - $DISPLAY | sudo -u ${KODI_USER} xauth merge -
+sudo -u ${KODI_USER} /usr/bin/kodi
+function onexit {
+        setfacl -R -b /run/user/$(id -u)
+        echo "setfacl removed acls"
+        echo
+}
+
+trap onexit EXIT
