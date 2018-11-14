@@ -1,0 +1,26 @@
+#!/bin/sh
+ARCHIVE=NO
+SIZE=104857600
+WD=/var/log
+HISTORY=30
+CDATE=$(date +"%Y%m%d-%H%M%S")
+ME=$0
+LOGNAME=$(basename $ME|cut -d- -f 2-)
+if [ $LOGNAME != 'rotatelog' ];then
+	cd $WD
+	if [ ${ARCHIVE} != 'NO' ];then
+		mv ${LOGNAME}.${HISTORY} ${LOGNAME}-${CDATE}
+		nice -n 10 xz -9 ${LOGNAME}-${CDATE} &
+	fi
+	for i in $(seq $HISTORY -1 2);do
+		mv ${LOGNAME}.$(($i -1)) ${LOGNAME}.${i}
+	done
+	mv ${LOGNAME} ${LOGNAME}.1
+else
+	echo "building logrotate.conf"
+	echo -n > /etc/rsyslog.d/logrotate.conf
+	for i in /etc/rsyslog.d/rotatelog-*;do
+		LOGNAME=$(basename $i|cut -d- -f2-);
+		echo "\$outchannel log_r_${LOGNAME},/var/log/${LOGNAME},${SIZE},/etc/rsyslog.d/rotatelog-$LOGNAME" >> /etc/rsyslog.d/logrotate.conf
+	done
+fi

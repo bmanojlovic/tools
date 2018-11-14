@@ -1,5 +1,10 @@
 #!/bin/sh
 # what to do to make this work
+# CONFIGURATION
+PROGRAM=/usr/bin/kodi
+PROGRAM_USER=kodi
+export PROGRAM PROGRAM_USER
+# END CONFIGURATION
 cat << EOF >> /dev/null
 
 add to sudoers these lines (change application and user)
@@ -9,19 +14,18 @@ steki  ALL=(kodi) NOPASSWD:  /usr/bin/kodi,/usr/bin/xauth
 #####
 
 EOF
-export KODI_USER=kodi
-export KODI_HOME=$(getent passwd ${KODI_USER} |cut -d: -f 6)
+export USER_HOME=$(getent passwd ${PROGRAM_USER} |cut -d: -f 6)
 if [ $? -ne 0 ];
 then
-        echo "no such user please create ${KODI_USER}"
+        echo "no such user please create ${PROGRAM_USER}"
         exit -1
 fi
-setfacl -m u:${KODI_USER}:x /run/user/$(id -u)
-setfacl -m u:${KODI_USER}:x /run/user/$(id -u)/pulse/
-setfacl -m u:${KODI_USER}:rwx /run/user/$(id -u)/pulse/native
+setfacl -m u:${PROGRAM_USER}:x /run/user/$(id -u)
+setfacl -m u:${PROGRAM_USER}:x /run/user/$(id -u)/pulse/
+setfacl -m u:${PROGRAM_USER}:rwx /run/user/$(id -u)/pulse/native
 cd 
-xauth extract - $DISPLAY | sudo -u ${KODI_USER} xauth merge -
-sudo -u ${KODI_USER} /usr/bin/kodi
+xauth extract - $DISPLAY | sudo -u ${PROGRAM_USER} xauth merge -
+sudo -u ${PROGRAM_USER} ${PROGRAM}
 function onexit {
         setfacl -R -b /run/user/$(id -u)
         echo "setfacl removed acls"
