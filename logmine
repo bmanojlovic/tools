@@ -1,0 +1,29 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["drain3"]
+# ///
+"""Analyze logs with drain3 pattern mining. Pipe journalctl or any log into it.
+
+Usage:
+  journalctl -u someservice.service --since "10 min ago" | logmine
+  cat /var/log/messages | logmine
+"""
+import sys
+from drain3 import TemplateMiner
+from drain3.template_miner_config import TemplateMinerConfig
+
+config = TemplateMinerConfig()
+config.drain_sim_th = 0.4
+config.drain_depth = 4
+miner = TemplateMiner(config=config)
+
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    miner.add_log_message(line)
+
+clusters = sorted(miner.drain.clusters, key=lambda c: c.size, reverse=True)
+for c in clusters:
+    print(f"[{c.size:>4}x] {c.get_template()}")
