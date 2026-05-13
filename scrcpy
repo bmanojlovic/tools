@@ -1,0 +1,47 @@
+#!/bin/sh
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["httpx"]
+# ///
+''':'
+. ~/.config/scrcpy/config
+if [ "$1" = "--update" ]; then
+    exec uv run "$0"
+fi
+cd "$SCRCPY_DIR"
+exec ./scrcpy "$@"
+'''
+
+import httpx
+import tarfile
+from pathlib import Path
+
+REPO = "Genymobile/scrcpy"
+DEST = Path.home() / ".local/share"
+CONFIG = Path.home() / ".config/scrcpy/config"
+
+def update():
+    tag = httpx.get(f"https://api.github.com/repos/{REPO}/releases/latest", follow_redirects=True).json()["tag_name"]
+    version = tag.lstrip("v")
+    archive = f"scrcpy-linux-x86_64-{version}.tar.gz"
+    url = f"https://github.com/{REPO}/releases/download/{tag}/{archive}"
+    local = Path(f"/tmp/{archive}")
+
+    print(f"Downloading {tag}...")
+    with httpx.stream("GET", url, follow_redirects=True) as r:
+        r.raise_for_status()
+        with open(local, "wb") as f:
+            for chunk in r.iter_bytes():
+                f.write(chunk)
+
+    print(f"Extracting to {DEST}...")
+    with tarfile.open(local) as tar:
+        tar.extractall(DEST)
+    local.unlink()
+
+    new_dir = DEST / f"scrcpy-linux-x86_64-{version}"
+    CONFIG.write_text(f'SCRCPY_DIR="{new_dir}"\n')
+    print(f"Updated to {tag} — config points to {new_dir}")
+
+if __name__ == "__main__":
+    update()
