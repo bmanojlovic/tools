@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# actions-pin: Resolve GitHub Actions to their latest release SHA for pinning.
+#
+# Usage:
+#   actions-pin actions/checkout actions/setup-node actions/setup-go
+#   actions-pin -f .github/workflows/build.yml   # extract and resolve all uses:
+#
+set -euo pipefail
+
+resolve_action() {
+  local action="$1"
+  local owner repo
+  owner="${action%%/*}"
+  repo="${action#*/}"
+
+  local tag sha
+  tag=$(gh api "repos/$owner/$repo/releases/latest" --jq '.tag_name' 2>/dev/null) || {
+    echo "# $action: no releases found" >&2
+    return 1
+  }
+
+  # Tags can be lightweight or annotated; dereference to commit
+  sha=$(gh api "repos/$owner/$repo/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null) || {
+    echo "# $action: could not resolve tag $tag" >&2
+    return 1
+  }
+
+  # Check if it's an annotated tag (object type = tag), dereference to commit
+  local obj_type
+  obj_type=$(gh api "repos/$owner/$repo/git/tags/$sha" --jq '.object.type' 2>/dev/null || echo "commit")
+  if [[ "$obj_type" == "commit" ]]; then
+    local commit_sha
+    commit_sha=$(gh api "repos/$owner/$repo/git/tags/$sha" --jq '.object.sha' 2>/dev/null || echo "$sha")
+    sha="$commit_sha"
+  fi
+
+  printf "%-45s %s # %s\n" "$action" "$sha" "$tag"
+}
+
+extract_from_file() {
+  local file="$1"
+  grep -oP 'uses:\s*\K[^@]+' "$file" | sort -u
+}
+
+# Main
+if [[ "${1:-}" == "-f" ]]; then
+  shift
+  for file in "$@"; do
+    if [[ ! -f "$file" ]]; then
+      echo "File not found: $file" >&2
+      continue
+    fi
+    while IFS= read -r action; do
+      resolve_action "$action"
+    done < <(extract_from_file "$file")
+  done
+else
+  if [[ $# -eq 0 ]]; then
+    echo "Usage: actions-pin <owner/repo> [owner/repo ...]"
+    echo "       actions-pin -f <workflow.yml> [workflow.yml ...]"
+    exit 1
+  fi
+  for action in "$@"; do
+    resolve_action "$action"
+  done
+fi
