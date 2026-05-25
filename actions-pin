@@ -39,7 +39,7 @@ resolve_action() {
 
 extract_from_file() {
   local file="$1"
-  grep -oP 'uses:\s*\K[^@]+' "$file" | sort -u
+  grep 'uses:' "$file" | sed -n 's/.*uses:[[:space:]]*\([^@]*\)@.*/\1/p' | sort -u
 }
 
 # Main
