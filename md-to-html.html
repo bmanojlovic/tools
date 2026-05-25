@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>MD Table Viewer</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, sans-serif; height: 100vh; display: flex; flex-direction: column; }
+.header { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; border-bottom: 1px solid #ddd; }
+.header h3 { margin: 0; }
+.panels { display: flex; flex: 1; overflow: hidden; }
+.panels textarea { flex: 1; border: none; border-right: 1px solid #ddd; padding: 12px; font-family: monospace; font-size: 14px; resize: none; outline: none; }
+.panels #output { flex: 1; padding: 12px; overflow-y: auto; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+th { background: #f5f5f5; font-weight: 600; }
+tr:nth-child(even) { background: #fafafa; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h3>MD → HTML</h3>
+  <button onclick="copyOutput()">📋 Copy</button>
+</div>
+<div class="panels">
+  <textarea id="src" placeholder="Paste markdown or terminal table here..."></textarea>
+  <div id="output"></div>
+</div>
+<script>
+const src = document.getElementById('src');
+const out = document.getElementById('output');
+function convert(text) {
+  text = text.replace(/\x1b\[[0-9;]*m/g, '');
+  if (/[┌┐└┘├┤┬┴┼─│]/.test(text)) {
+    const lines = text.split('\n');
+    let md = '', rows = [];
+    for (const l of lines) {
+      if (l.includes('│')) {
+        const cells = l.split('│').slice(1, -1).map(c => c.trim());
+        rows.push('| ' + cells.join(' | ') + ' |');
+      } else if (/^[\s┌┐└┘├┤┬┴┼─]+$/.test(l)) {
+        // skip decoration
+      } else {
+        if (rows.length) {
+          rows.splice(1, 0, '|' + rows[0].split('|').slice(1,-1).map(() => '---').join('|') + '|');
+          md += rows.join('\n') + '\n\n';
+          rows = [];
+        }
+        if (l.trim()) md += l.trim() + '\n\n';
+      }
+    }
+    if (rows.length) {
+      rows.splice(1, 0, '|' + rows[0].split('|').slice(1,-1).map(() => '---').join('|') + '|');
+      md += rows.join('\n');
+    }
+    return marked.parse(md);
+  }
+  return marked.parse(text);
+}
+src.addEventListener('input', () => { out.innerHTML = convert(src.value); });
+src.addEventListener('paste', () => { setTimeout(() => { out.innerHTML = convert(src.value); }, 50); });
+function copyOutput() {
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  const range = document.createRange();
+  range.selectNodeContents(out);
+  sel.addRange(range);
+  document.execCommand('copy');
+  sel.removeAllRanges();
+}
+</script>
+</body>
+</html>
