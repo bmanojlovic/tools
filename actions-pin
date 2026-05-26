@@ -8,18 +8,29 @@
 set -euo pipefail
 
 resolve_action() {
-  local action="$1"
-  local owner repo
+  local input="$1"
+  local action tag owner repo
+
+  # Support owner/repo@tag to pin a specific version
+  if [[ "$input" == *@* ]]; then
+    action="${input%%@*}"
+    tag="${input#*@}"
+  else
+    action="$input"
+    tag=""
+  fi
+
   owner="${action%%/*}"
   repo="${action#*/}"
 
-  local tag sha
-  tag=$(gh api "repos/$owner/$repo/releases/latest" --jq '.tag_name' 2>/dev/null) || {
-    echo "# $action: no releases found" >&2
-    return 1
-  }
+  if [[ -z "$tag" ]]; then
+    tag=$(gh api "repos/$owner/$repo/releases/latest" --jq '.tag_name' 2>/dev/null) || {
+      echo "# $action: no releases found" >&2
+      return 1
+    }
+  fi
 
-  # Tags can be lightweight or annotated; dereference to commit
+  local sha
   sha=$(gh api "repos/$owner/$repo/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null) || {
     echo "# $action: could not resolve tag $tag" >&2
     return 1
@@ -42,22 +53,41 @@ extract_from_file() {
   grep 'uses:' "$file" | sed -n 's/.*uses:[[:space:]]*\([^@]*\)@.*/\1/p' | sort -u
 }
 
+resolve_and_replace() {
+  local file="$1" content
+  content=$(cat "$file")
+  while IFS= read -r action; do
+    local owner="${action%%/*}" repo="${action#*/}"
+    local tag sha
+    tag=$(gh api "repos/$owner/$repo/releases/latest" --jq '.tag_name' 2>/dev/null) || continue
+    sha=$(gh api "repos/$owner/$repo/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null) || continue
+    local obj_type
+    obj_type=$(gh api "repos/$owner/$repo/git/tags/$sha" --jq '.object.type' 2>/dev/null || echo "commit")
+    if [[ "$obj_type" == "commit" ]]; then
+      sha=$(gh api "repos/$owner/$repo/git/tags/$sha" --jq '.object.sha' 2>/dev/null || echo "$sha")
+    fi
+    content=$(echo "$content" | sed "s|uses:[[:space:]]*${action}@.*|uses: ${action}@${sha} # ${tag}|g")
+    echo "  pinned ${action} → ${sha:0:12}... # ${tag}" >&2
+  done < <(extract_from_file "$file")
+  printf '%s\n' "$content"
+}
+
 # Main
 if [[ "${1:-}" == "-f" ]]; then
   shift
   for file in "$@"; do
-    if [[ ! -f "$file" ]]; then
-      echo "File not found: $file" >&2
-      continue
-    fi
-    while IFS= read -r action; do
-      resolve_action "$action"
-    done < <(extract_from_file "$file")
+    [[ -f "$file" ]] || { echo "File not found: $file" >&2; continue; }
+    tmp=$(mktemp)
+    resolve_and_replace "$file" > "$tmp"
+    mv "$tmp" "$file"
   done
+elif [[ $# -gt 0 && -f "$1" ]]; then
+  resolve_and_replace "$1"
 else
   if [[ $# -eq 0 ]]; then
-    echo "Usage: actions-pin <owner/repo> [owner/repo ...]"
-    echo "       actions-pin -f <workflow.yml> [workflow.yml ...]"
+    echo "Usage: actions-pin <workflow.yml>          # output to stdout"
+    echo "       actions-pin -f <workflow.yml> [...]  # replace in-place"
+    echo "       actions-pin <owner/repo> [...]       # resolve action to SHA"
     exit 1
   fi
   for action in "$@"; do
