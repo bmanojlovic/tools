@@ -9,7 +9,9 @@ body { font-family: -apple-system, sans-serif; height: 100vh; display: flex; fle
 .header { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; border-bottom: 1px solid #ddd; }
 .header h3 { margin: 0; }
 .panels { display: flex; flex: 1; overflow: hidden; }
-.panels textarea { flex: 1; border: none; border-right: 1px solid #ddd; padding: 12px; font-family: monospace; font-size: 14px; resize: none; outline: none; }
+.panels textarea { width: 50%; min-width: 100px; border: none; padding: 12px; font-family: monospace; font-size: 14px; resize: none; outline: none; }
+.resizer { width: 6px; cursor: col-resize; background: #ddd; flex-shrink: 0; user-select: none; transition: background 0.15s; }
+.resizer:hover, .resizer.active { background: #1a73e8; }
 .panels #output { flex: 1; padding: 12px; overflow-y: auto; }
 table { border-collapse: collapse; width: 100%; }
 th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
@@ -24,6 +26,7 @@ tr:nth-child(even) { background: #fafafa; }
 </div>
 <div class="panels">
   <textarea id="src" placeholder="Paste markdown or terminal table here..."></textarea>
+  <div class="resizer" id="resizer"></div>
   <div id="output"></div>
 </div>
 <script>
@@ -68,6 +71,31 @@ function copyOutput() {
   document.execCommand('copy');
   sel.removeAllRanges();
 }
+// --- Resizer ---
+const resizer = document.getElementById('resizer');
+let dragging = false;
+resizer.addEventListener('mousedown', (e) => {
+  dragging = true;
+  resizer.classList.add('active');
+  document.body.style.cursor = 'col-resize';
+  document.body.style.userSelect = 'none';
+  e.preventDefault();
+});
+document.addEventListener('mousemove', (e) => {
+  if (!dragging) return;
+  const panels = document.querySelector('.panels');
+  const rect = panels.getBoundingClientRect();
+  let w = e.clientX - rect.left;
+  w = Math.max(100, Math.min(w, rect.width - 104));
+  src.style.width = w + 'px';
+});
+document.addEventListener('mouseup', () => {
+  if (!dragging) return;
+  dragging = false;
+  resizer.classList.remove('active');
+  document.body.style.cursor = '';
+  document.body.style.userSelect = '';
+});
 </script>
 </body>
 </html>
