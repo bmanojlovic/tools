@@ -2,9 +2,15 @@
 
 Just tools which help but not really important to anyone except me...
 
-## AIX bashrc
+AI-assistant skills (Agent Skills format) live in their own `<name>/SKILL.md`
+subdirectories here — `actions-pin/`, `logmine/`, `osc-changes-update/`,
+`osc-go-vendored-cve/`, `osc-package-upgrade/`, `screen-debug/`,
+`steki-conventions/` — this is the single canonical source, symlinked into
+each AI assistant's own skills directory (e.g. `~/.claude/skills/<name>`).
 
-bashrc for AIX to make it a bit more usable...
+## aix/
+
+`bash_profile.txt` + `bashrc.txt` — bashrc/profile for AIX to make it a bit more usable...
 
 ## RUN_X_APP_AS_DIFFERENT_USER
 
@@ -75,3 +81,16 @@ mail.info                              :omfile:$log_r_mail.info
 ```
 
 and that is all what is required to make it rotate as you would like it to be rotated on file size
+
+## scrcpy
+
+Self-updating wrapper for [Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) (Android screen mirroring). Downloads and unpacks the latest Linux x86_64 release into `~/.local/share`, writes its location to `~/.config/scrcpy/config`, then execs the real `scrcpy` binary with whatever args you passed.
+
+```bash
+scrcpy --update   # fetch/refresh the latest release
+scrcpy            # run normally (reads SCRCPY_DIR from ~/.config/scrcpy/config)
+```
+
+## md-to-html.html
+
+Single-file, no-build markdown viewer — open it directly in a browser. Split-pane editor (paste/type markdown on the left) with a live-rendered preview on the right (via marked.js), resizable divider. Built with Markdown tables specifically in mind (renders them as real HTML `<table>`s), useful for previewing tables before pasting into somewhere that doesn't render markdown.
