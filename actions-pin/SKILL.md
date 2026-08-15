@@ -41,7 +41,7 @@ actions/checkout                              de0fac2e4500dabe0009e67214ff5f5447
 
 ## Install
 ```bash
-ln -s /path/to/tools/actions-pin ~/.local/bin/
+ln -s ~/GITHUB/tools/actions-pin/actions-pin ~/.local/bin/actions-pin
 ```
 
 Requires: `gh` CLI authenticated.
