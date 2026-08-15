@@ -3,27 +3,123 @@
 # requires-python = ">=3.11"
 # dependencies = ["drain3"]
 # ///
-"""Analyze logs with drain3 pattern mining. Pipe journalctl or any log into it.
+"""Cluster log lines by pattern with drain3. Pipe journalctl or any log into it.
 
-Usage:
-  journalctl -u someservice.service --since "10 min ago" | logmine
-  cat /var/log/messages | logmine
+Modes:
+  logmine                              cluster stdin, print counts + templates
+  logmine --values PATTERN             show distinct wildcard values for templates matching PATTERN
+  logmine --save FILE                  cluster stdin, persist miner state to FILE
+  logmine --baseline FILE              cluster stdin, print only templates NOT in FILE (new patterns)
+  logmine --baseline FILE --save FILE  do both — diff against FILE, then update it (rolling baseline)
+
+Examples:
+  journalctl -u k6s --since '10s ago' | logmine
+      -> cluster a live window, find the dominant repeated line
+
+  journalctl -u k6s --since '10s ago' | logmine --values orphan
+      -> for any template mentioning "orphan", list the distinct hashes/names
+         that filled its wildcards — tells you "same object retried forever"
+         (1 distinct value, high count) vs "many different objects" (many
+         distinct values) without hand-writing a grep|sort|uniq pipeline
+
+  journalctl -u k6s --since '2min ago' | logmine --save /tmp/baseline.state
+      ... apply a fix/restart ...
+  journalctl -u k6s --since '30s ago' | logmine --baseline /tmp/baseline.state
+      -> prints only templates that are NEW since the baseline capture —
+         confirms a restart/fix didn't just change the noise, or surfaces
+         a new problem the fix introduced
 """
+import argparse
 import sys
 from drain3 import TemplateMiner
 from drain3.template_miner_config import TemplateMinerConfig
+from drain3.file_persistence import FilePersistence
+from drain3.masking import MaskingInstruction
 
-config = TemplateMinerConfig()
-config.drain_sim_th = 0.4
-config.drain_depth = 4
-miner = TemplateMiner(config=config)
+# Pre-built masks for the noise that dominates k6s/Longhorn logs: UUIDs,
+# long hex hashes (orphan/CRD names, request IDs), IPv4 addresses, and ISO
+# timestamps. Without these, drain3 needs several repeated examples before
+# it learns a field varies — these let it recognize the field as variable
+# from the very first line, which matters for short-lived windows (a 5-10s
+# journalctl capture) where a hash-suffixed name might only appear once or
+# twice before you want the answer.
+DEFAULT_MASKS = [
+    MaskingInstruction(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", "UUID"),
+    MaskingInstruction(r"\b[0-9a-fA-F]{16,}\b", "HEX"),
+    MaskingInstruction(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", "IP"),
+    MaskingInstruction(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?", "TS"),
+]
 
-for line in sys.stdin:
-    line = line.strip()
-    if not line:
-        continue
-    miner.add_log_message(line)
 
-clusters = sorted(miner.drain.clusters, key=lambda c: c.size, reverse=True)
-for c in clusters:
-    print(f"[{c.size:>4}x] {c.get_template()}")
+def build_miner(persistence_file=None):
+    config = TemplateMinerConfig()
+    config.drain_sim_th = 0.4
+    config.drain_depth = 4
+    config.masking_instructions = DEFAULT_MASKS
+    handler = FilePersistence(persistence_file) if persistence_file else None
+    return TemplateMiner(persistence_handler=handler, config=config)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--values", metavar="PATTERN", help="show distinct wildcard values for templates containing PATTERN")
+    ap.add_argument("--baseline", metavar="FILE", help="only print templates not already present in this saved state")
+    ap.add_argument("--save", metavar="FILE", help="persist miner state to FILE after processing")
+    ap.add_argument("--top", type=int, default=0, help="limit output to the top N clusters by size")
+    args = ap.parse_args()
+
+    baseline_templates = set()
+    if args.baseline:
+        base_miner = build_miner(args.baseline)
+        if base_miner.drain.clusters:
+            baseline_templates = {c.get_template() for c in base_miner.drain.clusters}
+        else:
+            print(f"warning: no baseline state found at {args.baseline} (first run?)", file=sys.stderr)
+
+    miner = build_miner(args.save)
+
+    lines = []
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        lines.append(line)
+        miner.add_log_message(line)
+
+    if args.save:
+        miner.save_state("logmine CLI")
+
+    clusters = sorted(miner.drain.clusters, key=lambda c: c.size, reverse=True)
+    if args.baseline:
+        new_clusters = [c for c in clusters if c.get_template() not in baseline_templates]
+        if not new_clusters:
+            print("no new patterns vs baseline")
+        clusters = new_clusters
+
+    if args.top:
+        clusters = clusters[: args.top]
+
+    if args.values:
+        for c in clusters:
+            template = c.get_template()
+            if args.values not in template:
+                continue
+            values = set()
+            for line in lines:
+                params = miner.extract_parameters(template, line, exact_matching=True)
+                if params:
+                    values.add(tuple(p.value for p in params))
+            print(f"[{c.size:>4}x] {template}")
+            print(f"         {len(values)} distinct value-tuple(s):")
+            for v in sorted(values)[:20]:
+                print(f"           {v}")
+            if len(values) > 20:
+                print(f"           ... and {len(values) - 20} more")
+        return
+
+    for c in clusters:
+        print(f"[{c.size:>4}x] {c.get_template()}")
+
+
+if __name__ == "__main__":
+    main()
