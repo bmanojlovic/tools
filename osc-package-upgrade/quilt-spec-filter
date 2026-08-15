@@ -1,0 +1,18 @@
+#!/bin/bash
+# quilt-spec-filter - Filter spec files for quilt setup
+#
+# Removes/neutralizes distribution-specific RPM macros that are not
+# available locally but break quilt setup's rpmbuild parsing.
+#
+# Usage: quilt setup --spec-filter quilt-spec-filter *.spec
+#
+# Add new patterns below as you encounter them in different packages.
+
+sed \
+    -e 's/^%sysusers_requires/#%sysusers_requires/' \
+    -e 's/%{?pkg_vcmp:%pkg_vcmp [^}]*}%{!?pkg_vcmp:[0-9]*}/1/g' \
+    -e 's/%{?pkg_vcmp:%pkg_vcmp [^}]*}%{!?pkg_vcmp:0}/1/g' \
+    -e 's/%{?sle_version:[^}]*}%{!?sle_version:[^}]*}//g' \
+    -e 's/%fillup_prereq/Requires(pre): fillup/g' \
+    -e 's/^%systemd_ordering/#%systemd_ordering/' \
+    -e 's/^%license/%doc/'

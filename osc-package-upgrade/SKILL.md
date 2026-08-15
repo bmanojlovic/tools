@@ -159,7 +159,7 @@ quilt setup *.spec
 
 If `quilt setup` fails with `Unknown tag: %sysusers_requires` or similar errors from
 distribution-specific macros not available locally, use `--spec-filter` with `quilt-spec-filter`
-(installed at `~/.local/bin/quilt-spec-filter`, source in `~/GITHUB/tools/`):
+(installed at `~/.local/bin/quilt-spec-filter`, source alongside this skill in `~/GITHUB/tools/osc-package-upgrade/quilt-spec-filter`):
 
 ```bash
 # quilt resolves bare filter names against /usr/share/quilt/spec-filters/
@@ -174,7 +174,7 @@ The filter handles common openSUSE/SLE macros:
 - `%systemd_ordering` → commented out
 - `%license` → replaced with `%doc`
 
-Add new patterns to `~/GITHUB/tools/quilt-spec-filter` as encountered.
+Add new patterns to `~/GITHUB/tools/osc-package-upgrade/quilt-spec-filter` as encountered.
 
 ```bash
 # Enter source directory (check what was created)
